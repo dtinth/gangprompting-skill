@@ -1,0 +1,17 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "gangprompting-plugins",
+  "description": "Skills for gangprompting — collaborating with a coding agent as a group over a shared chat channel.",
+  "owner": {
+    "name": "dtinth"
+  },
+  "plugins": [
+    {
+      "name": "gangprompting",
+      "source": "./",
+      "description": "Loop yourself into a team's Discord or Slack channel so several people can prompt you together in one shared thread.",
+      "category": "productivity",
+      "keywords": ["gangprompting", "discord", "slack", "collaboration", "chat"]
+    }
+  ]
+}

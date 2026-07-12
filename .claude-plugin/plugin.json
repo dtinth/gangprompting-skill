@@ -1,0 +1,12 @@
+{
+  "name": "gangprompting",
+  "description": "Loop yourself into a team's Discord or Slack channel so several people can prompt you together in one shared thread.",
+  "version": "0.1.0",
+  "author": {
+    "name": "dtinth"
+  },
+  "homepage": "https://github.com/dtinth/gangprompting-skill",
+  "repository": "https://github.com/dtinth/gangprompting-skill",
+  "license": "MIT",
+  "keywords": ["gangprompting", "discord", "slack", "collaboration", "chat"]
+}
