@@ -30,4 +30,4 @@ Send a short greeting when you start listening ("I'm watching this channel now â
 
 ---
 
-The term *gangprompting* was coined by Dax Raad ([@thdxr](https://x.com/thdxr/status/2073045223752745189)). The bundled Discord bridge is [dtinth's `discord-agent-bridge.ts`](https://github.com/dtinth/discord-message-proxy/blob/main/tools/agent-bridge/discord-agent-bridge.ts).
+The term *gangprompting* was coined by Dax Raad ([@thdxr](https://x.com/thdxr/status/2064732709579080021)). The bundled Discord bridge is [dtinth's `discord-agent-bridge.ts`](https://github.com/dtinth/discord-message-proxy/blob/main/tools/agent-bridge/discord-agent-bridge.ts).

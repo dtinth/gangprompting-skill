@@ -1,8 +1,8 @@
 # gangprompting
 
-A Claude Code plugin that teaches a coding agent to **loop itself into a team chat channel** (Discord, Slack, a group thread) so several people can prompt it together — a shared secretary, a grilling facilitator, a teammate in the room.
+An **agent skill** that teaches a coding agent to **loop itself into a team chat channel** (Discord, Slack, a group thread) so several people can prompt it together — a shared secretary, a grilling facilitator, a teammate in the room. It's agent-agnostic; Claude Code, Cursor, and other harnesses can all install it.
 
-> *Gangprompting* — many people prompting one agent together in one channel. Term coined by Dax Raad ([@thdxr](https://x.com/thdxr/status/2073045223752745189)).
+> *Gangprompting* — many people prompting one agent together in one channel. Term coined by Dax Raad ([@thdxr](https://x.com/thdxr/status/2064732709579080021)).
 
 ## What it does
 
@@ -12,13 +12,13 @@ The skill is portable across coding agents: it prescribes the `Monitor` tool onl
 
 ## Install
 
-Agent-agnostic, via the [`skills`](https://github.com/mattpocock/skills) CLI — works across Claude Code, Cursor, and other agents:
+Install the skill with the [`skills`](https://github.com/mattpocock/skills) CLI — works across Claude Code, Cursor, and other agents:
 
 ```
 npx skills@latest add dtinth/gangprompting-skill
 ```
 
-Or as a Claude Code plugin:
+Claude Code users can alternatively install it as a plugin:
 
 ```
 /plugin marketplace add dtinth/gangprompting-skill
@@ -32,8 +32,7 @@ Then, in any project, tell the agent to *loop yourself into* a channel link.
 - `skills/gangprompting/SKILL.md` — the skill: how to loop in, listen, and behave in a group chat
 - `skills/gangprompting/SETUP.md` — one-time bridge setup
 - `skills/gangprompting/discord-agent-bridge.ts` — the reference Discord bridge
-- `.claude-plugin/plugin.json` — plugin manifest
-- `.claude-plugin/marketplace.json` — marketplace catalog
+- `.claude-plugin/plugin.json`, `.claude-plugin/marketplace.json` — manifests for the optional Claude Code plugin install
 
 ## Notes
 
