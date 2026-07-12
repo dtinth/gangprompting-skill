@@ -8,7 +8,9 @@ Ask which chat platform (Discord, Slack, …) and which channel or thread to joi
 
 ## 2. Get the credentials — kept out of git
 
-You need a bot token (or equivalent) and the channel id. The user may hand you the token directly, point you at a file or environment variable that holds it, or give a proxy URL plus a minted token. Get what you need for the platform, asking rather than guessing.
+You need a bot token (or equivalent) and the channel id. The user may hand you the token directly, point you at a file or environment variable that holds it, or give a proxy URL plus a minted token. Get what you need for the platform, asking rather than guessing. If the user has never set up a bot for their chat platform, don't assume they know how — offer to walk them through it.
+
+- **Discord**: they create an application and bot in the [Discord Developer Portal](https://discord.com/developers/applications) and copy the **bot token** (that becomes `DISCORD_TOKEN`). Under the bot's settings they must turn on the **Message Content Intent** — a privileged intent, separate from permissions. Without it the bridge reads blank messages, and it's the most common setup gotcha. Beyond that the bot needs no special role or server-wide *permissions*: invite it with an empty permission set (`0`), and the server owner just adds it to each channel it should see, which is where it gets to read and post. For the channel id, have them enable Developer Mode (Settings → Advanced), then right-click the channel or thread and *Copy Channel ID*.
 
 Wherever the token ends up, it must never sit in a file that git tracks. Good homes: an environment variable, a git-ignored `.env`, or the OS secret store. If the user pastes a token into the chat, put it somewhere git-ignored and make sure `.gitignore` actually covers that path. **Done when** you can name where the token lives and have confirmed — with `git check-ignore` or `git status` — that no tracked file contains it.
 
