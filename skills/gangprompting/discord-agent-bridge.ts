@@ -16,7 +16,8 @@
  *
  * ── Commands ─────────────────────────────────────────────────────────────────
  *   (none)                                        print usage
- *   send [text...] [--file <path>]                send a message (no text: read stdin)
+ *   send [text...] [--file <path>] [--attach <p>] send a message (no text: read stdin);
+ *                                                  --attach uploads a file, repeatable
  *   edit <messageId> [text...] [--file <path>]    edit a message this bot sent
  *   delete <messageId>                            delete a message
  *   read [--limit N] [--include-bots]             fetch recent messages once, oldest first
@@ -41,9 +42,12 @@
 const USAGE = `discord-agent-bridge — read and post Discord channel messages, one NDJSON line per message
 
 Usage:
-  discord-agent-bridge.ts send [text...] [--file <path>]
+  discord-agent-bridge.ts send [text...] [--file <path>] [--attach <path>]...
       Send a message. Text comes from the arguments, --file, or stdin (in that order
-      of preference). Prints the created message, so you can capture its id.
+      of preference). --attach uploads a file as an attachment and may be repeated to
+      attach several; with at least one attachment the message text may be empty.
+      Note: --file sets the message TEXT from a file, --attach uploads the file itself.
+      Prints the created message, so you can capture its id.
   discord-agent-bridge.ts edit <messageId> [text...] [--file <path>]
       Edit a message this bot previously sent. Text sources as with send.
   discord-agent-bridge.ts delete <messageId>
@@ -124,11 +128,37 @@ async function main(): Promise<void> {
 // ── commands ───────────────────────────────────────────────────────────────
 
 async function send(args: string[]): Promise<void> {
-  const { flags, options, positional } = parseArgs(args, [], ["file"]);
-  void flags;
-  const content = await resolveContent(positional, options.file);
-  const msg = await api("POST", `/channels/${cfg().channel}/messages`, { content }) as Message;
+  const { options, multi, positional } = parseArgs(args, [], ["file"], ["attach"]);
+  const attachments = multi.attach ?? [];
+  const content = await resolveContent(positional, options.file, attachments.length > 0);
+  const body = attachments.length > 0
+    ? await buildUpload(content, attachments)
+    : { content };
+  const msg = await api("POST", `/channels/${cfg().channel}/messages`, body) as Message;
   console.log(JSON.stringify(toRecord(msg)));
+}
+
+/** Build a multipart body that uploads files[] alongside the message JSON. */
+async function buildUpload(content: string, paths: string[]): Promise<FormData> {
+  const form = new FormData();
+  const meta = paths.map((p, i) => ({ id: i, filename: basename(p) }));
+  form.append("payload_json", JSON.stringify({ content, attachments: meta }));
+  for (let i = 0; i < paths.length; i++) {
+    let data: Uint8Array;
+    try {
+      data = await Deno.readFile(paths[i]);
+    } catch (err) {
+      fatal(`--attach: cannot read ${paths[i]}: ${err instanceof Error ? err.message : err}`);
+    }
+    // Copy into a fresh ArrayBuffer-backed array so the Blob part is a plain ArrayBuffer.
+    const bytes = new Uint8Array(data);
+    form.append(`files[${i}]`, new Blob([bytes]), basename(paths[i]));
+  }
+  return form;
+}
+
+function basename(path: string): string {
+  return path.split(/[\\/]/).pop() || path;
 }
 
 async function edit(args: string[]): Promise<void> {
@@ -213,17 +243,20 @@ function cfg(): { token: string; channel: string; api: string } {
   return cached;
 }
 
-/** One Discord REST call. Waits out a 429 once; throws on any other failure. */
+/** One Discord REST call. Waits out a 429 once; throws on any other failure.
+ *  A FormData body is sent as multipart (for file uploads); anything else as JSON. */
 async function api(method: string, path: string, body?: unknown): Promise<unknown> {
+  const isForm = body instanceof FormData;
   for (let attempt = 0; attempt < 2; attempt++) {
     const res = await fetch(`${cfg().api}${path}`, {
       method,
       headers: {
         authorization: `Bot ${cfg().token}`,
         "user-agent": UA,
-        ...(body !== undefined ? { "content-type": "application/json" } : {}),
+        // Let fetch set the multipart boundary itself; only JSON needs an explicit type.
+        ...(body !== undefined && !isForm ? { "content-type": "application/json" } : {}),
       },
-      body: body !== undefined ? JSON.stringify(body) : undefined,
+      body: body === undefined ? undefined : isForm ? body : JSON.stringify(body),
     });
     if (res.status === 429 && attempt === 0) {
       const data = await res.json().catch(() => ({}));
@@ -264,39 +297,55 @@ function sortOldestFirst(messages: Message[]): Message[] {
 
 // ── CLI plumbing ───────────────────────────────────────────────────────────
 
-/** Split argv into boolean flags, valued options, and positional arguments. */
+/** Split argv into boolean flags, valued options, repeatable options, and positionals.
+ *  Names in multiNames may appear more than once and collect into an array. */
 function parseArgs(
   args: string[],
   flagNames: string[],
   optionNames: string[],
-): { flags: Record<string, boolean>; options: Record<string, string>; positional: string[] } {
+  multiNames: string[] = [],
+): {
+  flags: Record<string, boolean>;
+  options: Record<string, string>;
+  multi: Record<string, string[]>;
+  positional: string[];
+} {
   const flags: Record<string, boolean> = {};
   const options: Record<string, string> = {};
+  const multi: Record<string, string[]> = {};
   const positional: string[] = [];
   for (let i = 0; i < args.length; i++) {
     const arg = args[i];
     if (arg.startsWith("--")) {
       const name = arg.slice(2);
       if (flagNames.includes(name)) flags[name] = true;
-      else if (optionNames.includes(name)) {
+      else if (optionNames.includes(name) || multiNames.includes(name)) {
         const value = args[++i];
         if (value === undefined) fatal(`--${name} needs a value`);
-        options[name] = value;
+        if (multiNames.includes(name)) (multi[name] ??= []).push(value);
+        else options[name] = value;
       } else fatal(`unknown option --${name}`);
     } else positional.push(arg);
   }
-  return { flags, options, positional };
+  return { flags, options, multi, positional };
 }
 
-/** Message text from positional args, --file, or stdin — exactly one source. */
-async function resolveContent(positional: string[], file: string | undefined): Promise<string> {
+/** Message text from positional args, --file, or stdin — exactly one source.
+ *  When allowEmpty (an attachment is present), skip the stdin prompt on a TTY and
+ *  permit empty text so an attachment-only message can be sent. */
+async function resolveContent(
+  positional: string[],
+  file: string | undefined,
+  allowEmpty = false,
+): Promise<string> {
   if (positional.length > 0 && file) fatal("give the text as arguments or via --file, not both");
   let content: string;
   if (file) content = await Deno.readTextFile(file);
   else if (positional.length > 0) content = positional.join(" ");
+  else if (allowEmpty && Deno.stdin.isTerminal()) content = "";
   else content = await new Response(Deno.stdin.readable).text();
   content = content.replace(/\n+$/, "");
-  if (!content) fatal("empty message; give text as arguments, --file, or stdin");
+  if (!content && !allowEmpty) fatal("empty message; give text as arguments, --file, or stdin");
   return content;
 }
 
