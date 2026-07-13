@@ -10,13 +10,18 @@ Discord ──monitor──▶ opencode-relay ──prompt_async──▶ OpenCo
 
 ## Wire it up
 
-1. **Find this session's id and the server.** OpenCode serves on `http://127.0.0.1:4096` by default. Your session id looks like `ses_…`; get it from the OpenCode client, or from `GET /session` (match on title or `directory`).
+1. **Ask the user for the server URL and the session id.** They're running the session, so they usually know both — ask first rather than guessing. The session id looks like `ses_…`. If they don't have them handy, offer to introspect as a convenience: the server is an `opencode serve` process (find its host/port with `ss -tlnp | grep opencode`, default `http://127.0.0.1:4096`), and `GET <base>/session` lists sessions to match by `title` or `directory`.
 2. **Export the env** the two scripts need — the bridge's `DISCORD_TOKEN` / `DISCORD_CHANNEL` / `DISCORD_API`, plus `SESSION_ID` for the relay (and `OPENCODE_BASE` / `LOCATION` if they differ from the defaults). Keep the token in a git-safe place, as in [`SETUP.md`](SETUP.md).
-3. **Start the pipeline in tmux** (or screen) so it survives while you work. This is mandatory, not a nicety: OpenCode v1 has no tool for running a command in the background at all. Its Bash tool runs each call in a fresh shell with a ~120s timeout and tears down the process group when the call returns, so `&`, `nohup`, and `disown` don't keep a watcher alive. A detached tmux session is the only durable primitive.
+3. **Start the pipeline in a detached tmux session.** This is mandatory, not a nicety: OpenCode v1 has no tool for running a command in the background at all. Its Bash tool runs each call in a fresh shell with a ~120s timeout and tears down the process group when the call returns, so `&`, `nohup`, and `disown` don't keep a watcher alive. A detached tmux session is the only durable primitive. Launch the whole pipe in one shot — don't juggle windows and `send-keys`:
    ```
-   discord-agent-bridge.ts monitor | opencode-relay.ts
+   tmux new-session -d -s gangprompt \
+     'source /path/to/gangprompt.env && discord-agent-bridge.ts monitor | opencode-relay.ts'
    ```
-4. **Reply** by calling `discord-agent-bridge.ts send <text>` when you answer in the channel.
+4. **Tell the user you're now listening through tmux, and name the session** (`gangprompt` above) so they can look in or take over. Give them the handles:
+   - watch live: `tmux attach -t gangprompt` (detach again with `Ctrl-b` then `d`)
+   - peek once without attaching: `tmux capture-pane -pt gangprompt`
+   - stop listening: `tmux kill-session -t gangprompt`
+5. **Reply** by calling `discord-agent-bridge.ts send <text>` when you answer in the channel.
 
 ## OpenCode API notes
 
