@@ -1,6 +1,6 @@
 # Setting up a gangprompting bridge
 
-Do this once per project. The goal: a working **bridge** — `read`, `send`, `monitor` commands, one line of JSON per message — plus the facts recorded in `CLAUDE.md` so that next time the user just says "loop yourself in" and you connect. Work through the steps in order; each ends on a check you can verify against the real channel.
+Do this once per project. The goal: a working **bridge** — `read`, `send`, `monitor` commands, one line of JSON per message — plus the setup memorized (`CLAUDE.md` or `AGENTS.md`) so that next time the user just says "loop yourself in" and you connect. Work through the steps in order; each ends on a check you can verify against the real channel.
 
 ## 1. Pick the platform and channel
 
@@ -33,15 +33,15 @@ Prove each command works, not just that the script runs:
 
 **Done when** all three are verified against the live channel.
 
-## 5. Record it in CLAUDE.md
+## 5. Memorize the setup
 
-Write the non-secret facts so looping in is one step next time:
+Write the non-secret facts to your project memory (`CLAUDE.md` or `AGENTS.md`) so looping in is one step next time:
 
 - the platform and channel id,
 - the exact `read` / `send` / `monitor` commands, noting *by reference* how the token is supplied (e.g. "reads `DISCORD_TOKEN` from `.env`") — never the token itself,
 - the team's turn-taking preference from the group-chat guidance.
 
-**Done when** `CLAUDE.md` holds the commands, channel, and preference, and the token appears in no tracked file.
+**Done when** your project memory holds the commands, channel, and preference, and the token appears in no tracked file.
 
 ---
 

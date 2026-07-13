@@ -7,7 +7,7 @@ Gangprompting is many people prompting one agent together in a shared channel �
 
 ## First: is the bridge set up?
 
-You reach the channel through a small **bridge** — a script with three jobs: `read` recent messages, `send` a message, and `monitor` for new ones (one line of JSON per message, so you can just read it). Check whether this project already has one: look in `CLAUDE.md` or the project's notes for a recorded bridge command and channel id.
+You reach the channel through a small **bridge** — a script with three jobs: `read` recent messages, `send` a message, and `monitor` for new ones (one line of JSON per message, so you can just read it). Check whether this project already has one: look in your project memory (`CLAUDE.md` or `AGENTS.md`) for a recorded bridge command and channel id.
 
 - **Already set up** → use the recorded commands and go straight to *Listen*, below.
 - **Not yet** → follow [`SETUP.md`](SETUP.md) to build and test a bridge, then come back here. Everything past this point assumes a working bridge.
