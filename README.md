@@ -37,5 +37,3 @@ Then, in any project, tell the agent to *loop yourself into* a channel link.
 ## Notes
 
 - Tested on Claude Code only. Listening needs a background watch that notifies the agent per message — the `Monitor` tool on Claude Code. On other agents that's unverified; the skill tells them to find an equivalent or fall back to long-polling, but this hasn't been exercised. Reports welcome.
-- Update `owner` / `author` in `.claude-plugin/*.json` and the repo path in the install command to match wherever you host this.
-- The marketplace lists the plugin with a `"./"` source, so it must be added from a git repo or local path (not a raw URL to `marketplace.json`).
