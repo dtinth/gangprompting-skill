@@ -17,7 +17,7 @@ You reach the channel through a small **bridge** — a script with three jobs: `
 The `monitor` command runs forever, streaming one JSON line per new message. Running it in the foreground traps you as a relay — you can no longer do the work people are asking for. Run it in the background so you stay free and get pinged per message.
 
 - **Claude Code**: run the `monitor` command with the **Monitor** tool and `persistent: true`. Monitor runs a shell command in the background and delivers each stdout line to you as a chat notification, so you keep working and hear about each new message as it lands. (Bash `run_in_background` is wrong here — its short timeout kills a watch that must run all session.)
-- **Other harnesses**: find the equivalent — any background watch that notifies you per output line. If your harness has none, fall back to long-polling: run the `read` command yourself every so often to catch up.
+- **Other harnesses**: find the equivalent — any background watch that notifies you per output line. If your harness has none, fall back to long-polling: run the `read` command yourself every so often to catch up. (OpenCode has no such tool — see [`HARNESS-OPENCODE.md`](HARNESS-OPENCODE.md) for a worked recipe.)
 
 Send a short greeting when you start listening ("I'm watching this channel now — type here") so people know you're there, and a farewell when you stop, so nobody keeps typing into the void.
 

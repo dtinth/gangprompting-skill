@@ -18,13 +18,6 @@ Install the skill with the [`skills`](https://github.com/mattpocock/skills) CLI,
 npx skills@latest add dtinth/gangprompting-skill
 ```
 
-Claude Code users can alternatively install it as a plugin:
-
-```
-/plugin marketplace add dtinth/gangprompting-skill
-/plugin install gangprompting@gangprompting-plugins
-```
-
 Then, in any project, tell the agent to *loop yourself into* a channel link.
 
 ## Layout
@@ -32,7 +25,7 @@ Then, in any project, tell the agent to *loop yourself into* a channel link.
 - `skills/gangprompting/SKILL.md` — the skill: how to loop in, listen, and behave in a group chat
 - `skills/gangprompting/SETUP.md` — one-time bridge setup
 - `skills/gangprompting/discord-agent-bridge.ts` — the reference Discord bridge
-- `.claude-plugin/plugin.json`, `.claude-plugin/marketplace.json` — manifests for the optional Claude Code plugin install
+- `skills/gangprompting/HARNESS-OPENCODE.md`, `skills/gangprompting/opencode-relay.ts` — running it on OpenCode (v1.x)
 
 ## Notes
 
