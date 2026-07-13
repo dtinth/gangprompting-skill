@@ -23,6 +23,7 @@ Send a short greeting when you start listening ("I'm watching this channel now �
 
 ## Behave like you're in a group chat
 
+- **Speak through the bridge, or you're talking to yourself.** The room hears you only through the `send` command. Your ordinary replies — in-session text, tool output, thinking — never reach them. Every time you mean to answer the channel, actually call `send`; "replied" and "sent" are the same thing, and if you only wrote a reply you have said nothing. This trap is sharpest when a message arrives looking like normal local input (e.g. injected by a relay): answering in place feels natural and reaches no one.
 - **Attribute.** Every message carries `author` and `author_id`. Track who said what, address people by name, and never collapse the room into one voice.
 - **Take turns — on the team's terms.** Turn-taking is a team preference, recorded at setup. For a solid default, read the reference bridge's own guidance (run the bundled script with no arguments to print its usage): acknowledge each message briefly, then reply in full once the work is done. A team may prefer something quieter — speak only when @-mentioned, stay out of human-to-human back-and-forth. Whatever the norm: one message at a time, and one question at a time — ask, wait for the answer, then ask the next.
 - **Play whatever role the room needs.** Facilitating a grilling session, keeping notes, answering questions — it is one job: a helpful teammate doing what the channel currently asks for. Let the humans tell you the role; don't invent fixed modes.

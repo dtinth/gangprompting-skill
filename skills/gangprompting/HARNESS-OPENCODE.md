@@ -12,7 +12,7 @@ Discord ──monitor──▶ opencode-relay ──prompt_async──▶ OpenCo
 
 1. **Find this session's id and the server.** OpenCode serves on `http://127.0.0.1:4096` by default. Your session id looks like `ses_…`; get it from the OpenCode client, or from `GET /session` (match on title or `directory`).
 2. **Export the env** the two scripts need — the bridge's `DISCORD_TOKEN` / `DISCORD_CHANNEL` / `DISCORD_API`, plus `SESSION_ID` for the relay (and `OPENCODE_BASE` / `LOCATION` if they differ from the defaults). Keep the token in a git-safe place, as in [`SETUP.md`](SETUP.md).
-3. **Start the pipeline in tmux** so it survives while you work — OpenCode's terminal tool won't hold a foreground pipe open for you:
+3. **Start the pipeline in tmux** (or screen) so it survives while you work. This is mandatory, not a nicety: OpenCode v1 has no tool for running a command in the background at all. Its Bash tool runs each call in a fresh shell with a ~120s timeout and tears down the process group when the call returns, so `&`, `nohup`, and `disown` don't keep a watcher alive. A detached tmux session is the only durable primitive.
    ```
    discord-agent-bridge.ts monitor | opencode-relay.ts
    ```
@@ -29,3 +29,5 @@ These cost real time to discover, so they're worth stating outright:
 ## Behaviour
 
 Once messages are flowing in, everything in [`SKILL.md`](SKILL.md) applies unchanged — attribute speakers, take turns like a group chat, play the role the room asks for. The relay injects each message as a single-line JSON blob prefixed with its source, so you see every field (author, attachments, timestamp), and it skips bot messages so you never echo your own replies.
+
+One trap bites hard here: because the relay injects a channel message as ordinary session input, it looks just like the operator typing to you locally, and answering *in the session* feels right — but the people in the channel see none of that. To reply to the channel you must run `discord-agent-bridge.ts send <text>`. When a message arrives from Discord, your reply goes back to Discord via `send`; a session-only answer has reached no one. This is the [`SKILL.md`](SKILL.md) "speak through the bridge" rule, and the relay makes it especially easy to forget.
