@@ -1,6 +1,8 @@
 # gangprompting
 
-An **agent skill** that teaches a coding agent to **loop itself into a team chat channel** (Discord, Slack, a group thread) so several people can prompt it together — a shared secretary, a [grilling](https://github.com/mattpocock/skills/blob/main/skills/productivity/grilling/SKILL.md) facilitator, a teammate in the room. It's written to be agent-agnostic, but so far only developed and tested on Claude Code and OpenCode.
+An **agent skill** that teaches a coding agent to **loop itself into a team chat channel** (Discord, Slack, a group thread) so several people can prompt it together — a shared secretary, a [grilling](https://github.com/mattpocock/skills/blob/main/skills/productivity/grilling/SKILL.md) facilitator, a teammate in the room. This skill is agent-agnostic (with specific guidance for Claude Code and OpenCode) and platform-agnostic (with specific guidance for Discord and Slack).
+
+Instead of instructing an agent to run a random script from the internet; **this skill teaches an agent how to build its own bridge,** tailored to your setup.
 
 > *Gangprompting* — many people prompting one agent together in one channel. Term coined by Dax Raad ([@thdxr](https://x.com/thdxr/status/2064732709579080021)).
 
