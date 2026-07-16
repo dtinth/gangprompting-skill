@@ -24,5 +24,7 @@ Then, in any project, tell the agent to *loop yourself into* a channel link.
 
 - [SKILL.md](./skills/gangprompting/SKILL.md) — how to loop in, listen, and behave in a group chat
 - [SETUP.md](./skills/gangprompting/SETUP.md) — one-time bridge setup
+- Platform-specific guidance:
+    - [PLATFORM-SLACK.md](./skills/gangprompting/PLATFORM-SLACK.md) — running it on Slack (scopes, polling vs Socket Mode)
 - Harness-specific guidance:
     - [HARNESS-OPENCODE.md](./skills/gangprompting/HARNESS-OPENCODE.md) — setup guide for OpenCode v1.x
