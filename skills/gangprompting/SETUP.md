@@ -56,3 +56,14 @@ Write the non-secret facts to your project memory (`CLAUDE.md` or `AGENTS.md`) s
 ---
 
 Bridge ready — return to [`SKILL.md`](SKILL.md) and loop in.
+
+## Optional: lower latency with a push subscription
+
+Everything above uses **polling** — `monitor` asks the platform for new messages on an interval. That's the right default, and it scales without coordination: several agents can each poll their own channel independently and it just works. The cost is delay bounded by the poll interval, but 20–40 seconds is usually fine — an agent's turn often takes longer than that anyway.
+
+When the lowest possible latency actually matters, offer the user a **push subscription** instead: subscribe to the platform directly so events arrive the instant they happen — Discord's **Gateway**, Slack's **Socket Mode** (platform specifics live in the platform guide, e.g. [`PLATFORM-SLACK.md`](PLATFORM-SLACK.md)). The catch is that most platforms allow only **one connection per app**, so you either:
+
+- accept that only one session listens at a time, or
+- run a small **daemon** that holds the single connection and fans each message out to the agents watching that channel.
+
+Reach for this only when the latency is worth it — the daemon in particular is real added complexity.

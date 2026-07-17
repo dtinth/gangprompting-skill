@@ -32,9 +32,9 @@ The cost is delay: messages arrive at most one poll interval late. At Tier 3 (50
 
 ## Optional optimization: Socket Mode
 
-For immediate delivery instead of a poll interval, enable **Socket Mode** — Slack pushes events over a WebSocket as they happen. Offer this as an upgrade once polling works, not as the starting point, because it adds moving parts:
+Slack's push subscription is **Socket Mode** — the low-latency alternative to polling. See [Optional: lower latency with a push subscription](SETUP.md) in `SETUP.md` for when it's worth it and the one-connection-per-app caveat (and the fan-out daemon that works around it). The Slack-specific mechanics:
 
 - It needs an **app-level token** (`xapp-…`) with the `connections:write` scope — separate from the bot token, and easy to confuse with the bot scopes above.
-- Slack allows **one Socket Mode connection per app**, which doesn't fit "one bridge process per channel." When several channels or agents must share one app, run a single **ingest daemon** that holds the socket and writes every event into a shared store (e.g. SQLite); `read` / `monitor` then become local queries scoped by channel, with no per-consumer subscription bookkeeping. Only reach for this when the one-connection limit actually bites.
+- If you build a fan-out daemon, SQLite is enough for the shared store: the daemon holds the socket and writes every event there, and `read` / `monitor` become local queries scoped by channel.
 
 (A third mechanism, the **Events API**, pushes events to an HTTP endpoint — but it needs a public HTTPS URL, which an agent in a devbox usually can't provide, so it's rarely the right fit here.)
