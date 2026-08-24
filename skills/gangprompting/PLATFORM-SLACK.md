@@ -25,6 +25,8 @@ Request the bot scopes for every feature you'll build *upfront* — adding one l
 
 The lightweight default is **polling** `conversations.history` on an interval (and `conversations.replies` for threads), tracking the latest seen `ts` and requesting only newer messages each time — exactly as the Discord bridge tracks the last message id. It fits gangprompting well:
 
+Slack's message events carry the channel in `channel`; map it to `channel_id` in the record you emit, and give `send` / `read` / `monitor` the same `--channel` override the Discord bridge has, so one agent can work several channels without guessing which room a line came from.
+
 - **No central coordinator** — each agent polls its own channel independently.
 - **Nothing persistent to keep alive** — just periodic REST calls, the same shape as the Discord bridge's `monitor`.
 
