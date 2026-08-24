@@ -10,6 +10,11 @@
  * event streams (agent harnesses, `grep --line-buffered`, etc.) without any parsing
  * gymnastics. Messages authored by bots are skipped unless --include-bots is passed.
  *
+ * Every record carries its own channel_id, and every command takes --channel, so one agent
+ * can work several channels at once: the lines stay distinguishable after N monitor streams
+ * are merged, and a reply names its target instead of inheriting whatever DISCORD_CHANNEL
+ * happens to be set in the surrounding shell.
+ *
  * Meant for looping teammates into a session over Discord — see the "Best practices"
  * section of the usage text (run with no arguments) for how an agent should behave
  * around greeting, acknowledging, and signing off.
@@ -28,7 +33,7 @@
  *
  * ── Config (env) ─────────────────────────────────────────────────────────────
  *   DISCORD_TOKEN          (required)  bot token or proxy JWT; sent as "Bot <token>"
- *   DISCORD_CHANNEL        (required)  channel id to operate on
+ *   DISCORD_CHANNEL        (required unless --channel is passed)  default channel id
  *   DISCORD_API            (optional)  API base, default "https://discord.com/api/v10"
  *   DISCORD_POLL_INTERVAL  (optional)  monitor poll interval in seconds, default 20
  *
@@ -40,6 +45,10 @@
  */
 
 const USAGE = `discord-agent-bridge — read and post Discord channel messages, one NDJSON line per message
+
+Every command takes --channel <id> to override DISCORD_CHANNEL for that one call. Use it
+whenever you work more than one channel: reply to the channel_id you were addressed from
+rather than trusting the ambient DISCORD_CHANNEL.
 
 Usage:
   discord-agent-bridge.ts send [text...] [--file <path>] [--attach <path>]...
@@ -70,7 +79,7 @@ Usage:
 
 Environment:
   DISCORD_TOKEN          (required)  bot token or proxy JWT; sent as "Authorization: Bot <token>"
-  DISCORD_CHANNEL        (required)  channel id to operate on
+  DISCORD_CHANNEL        (required unless --channel is passed)  default channel id
   DISCORD_API            (optional)  API base URL, default https://discord.com/api/v10
                                      (point this at a discord-message-proxy to use a scoped JWT)
   DISCORD_POLL_INTERVAL  (optional)  monitor poll interval in seconds, default 20
@@ -80,7 +89,7 @@ Environment:
   token minted from a discord-message-proxy (see DISCORD_API above).
 
 Output format (NDJSON, one message per line):
-  {"id":"…","timestamp":"2026-01-01T00:00:00.000000+00:00","author":"name","author_id":"…","bot":false,"content":"hi"}
+  {"id":"…","channel_id":"…","timestamp":"2026-01-01T00:00:00.000000+00:00","author":"name","author_id":"…","bot":false,"content":"hi"}
 "attachments" (array of URLs) and "edited_timestamp" appear only when present.
 
 Best practices (for agents using this to loop teammates into a session over Discord):
@@ -91,6 +100,9 @@ Best practices (for agents using this to loop teammates into a session over Disc
     as the only reply — send a second one once the work is actually done.
   - When you stop monitor, send a farewell (e.g. "No longer monitoring this channel") so
     people don't keep typing expecting a reply.
+  - When you watch more than one channel, treat channel_id as part of who is speaking. Reply
+    to the channel the message came from, with --channel, and never carry what was said in
+    one channel into another unless someone asks you to.
   - When asking a question, favor being easy to understand over being terse — a teammate
     reading on their phone won't have your context, so spell out what you're asking and why.
     A concrete example or two of the options often makes it click faster than more prose.
@@ -128,14 +140,15 @@ async function main(): Promise<void> {
 // ── commands ───────────────────────────────────────────────────────────────
 
 async function send(args: string[]): Promise<void> {
-  const { options, multi, positional } = parseArgs(args, [], ["file"], ["attach"]);
+  const { options, multi, positional } = parseArgs(args, [], ["file", "channel"], ["attach"]);
+  const channel = resolveChannel(options.channel);
   const attachments = multi.attach ?? [];
   const content = await resolveContent(positional, options.file, attachments.length > 0);
   const body = attachments.length > 0
     ? await buildUpload(content, attachments)
     : { content };
-  const msg = await api("POST", `/channels/${cfg().channel}/messages`, body) as Message;
-  console.log(JSON.stringify(toRecord(msg)));
+  const msg = await api("POST", `/channels/${channel}/messages`, body) as Message;
+  console.log(JSON.stringify(toRecord(msg, channel)));
 }
 
 /** Build a multipart body that uploads files[] alongside the message JSON. */
@@ -162,48 +175,52 @@ function basename(path: string): string {
 }
 
 async function edit(args: string[]): Promise<void> {
-  const { options, positional } = parseArgs(args, [], ["file"]);
+  const { options, positional } = parseArgs(args, [], ["file", "channel"]);
+  const channel = resolveChannel(options.channel);
   const messageId = positional.shift();
   if (!messageId || !/^\d+$/.test(messageId)) fatal("edit: first argument must be a message id");
   const content = await resolveContent(positional, options.file);
-  const msg = await api("PATCH", `/channels/${cfg().channel}/messages/${messageId}`, { content }) as Message;
-  console.log(JSON.stringify(toRecord(msg)));
+  const msg = await api("PATCH", `/channels/${channel}/messages/${messageId}`, { content }) as Message;
+  console.log(JSON.stringify(toRecord(msg, channel)));
 }
 
 async function remove(args: string[]): Promise<void> {
-  const { positional } = parseArgs(args, [], []);
+  const { options, positional } = parseArgs(args, [], ["channel"]);
+  const channel = resolveChannel(options.channel);
   const messageId = positional[0];
   if (!messageId || !/^\d+$/.test(messageId)) fatal("delete: first argument must be a message id");
-  await api("DELETE", `/channels/${cfg().channel}/messages/${messageId}`);
-  console.log(JSON.stringify({ deleted: messageId }));
+  await api("DELETE", `/channels/${channel}/messages/${messageId}`);
+  console.log(JSON.stringify({ deleted: messageId, channel_id: channel }));
 }
 
 async function read(args: string[]): Promise<void> {
-  const { flags, options } = parseArgs(args, ["include-bots"], ["limit"]);
+  const { flags, options } = parseArgs(args, ["include-bots"], ["limit", "channel"]);
+  const channel = resolveChannel(options.channel);
   const limit = Number(options.limit ?? "50");
   if (!Number.isInteger(limit) || limit < 1 || limit > 100) fatal("read: --limit must be 1..100");
-  const messages = await api("GET", `/channels/${cfg().channel}/messages?limit=${limit}`) as Message[];
+  const messages = await api("GET", `/channels/${channel}/messages?limit=${limit}`) as Message[];
   for (const msg of sortOldestFirst(messages)) {
     if (msg.author?.bot && !flags["include-bots"]) continue;
-    console.log(JSON.stringify(toRecord(msg)));
+    console.log(JSON.stringify(toRecord(msg, channel)));
   }
 }
 
 async function monitor(args: string[]): Promise<void> {
-  const { flags } = parseArgs(args, ["include-bots"], []);
+  const { flags, options } = parseArgs(args, ["include-bots"], ["channel"]);
+  const channel = resolveChannel(options.channel);
   const intervalSec = Number(Deno.env.get("DISCORD_POLL_INTERVAL") ?? "20");
   if (!Number.isFinite(intervalSec) || intervalSec < 1) fatal("DISCORD_POLL_INTERVAL must be ≥ 1 second");
 
   // Baseline: remember the newest message at startup so we never emit backlog.
-  const latest = await api("GET", `/channels/${cfg().channel}/messages?limit=1`) as Message[];
+  const latest = await api("GET", `/channels/${channel}/messages?limit=1`) as Message[];
   let lastId = latest[0]?.id ?? "0";
-  console.error(`monitoring channel ${cfg().channel} (poll every ${intervalSec}s, after message ${lastId})`);
+  console.error(`monitoring channel ${channel} (poll every ${intervalSec}s, after message ${lastId})`);
 
   while (true) {
     await sleep(intervalSec * 1000);
     let batch: Message[];
     try {
-      batch = await api("GET", `/channels/${cfg().channel}/messages?after=${lastId}&limit=100`) as Message[];
+      batch = await api("GET", `/channels/${channel}/messages?after=${lastId}&limit=100`) as Message[];
     } catch (err) {
       // Transient failure (network, 5xx, rate limit past its retry): log and keep polling.
       console.error(`poll failed: ${err instanceof Error ? err.message : err}`);
@@ -212,7 +229,7 @@ async function monitor(args: string[]): Promise<void> {
     for (const msg of sortOldestFirst(batch)) {
       lastId = msg.id; // advance past bot messages too, or we'd refetch them forever
       if (msg.author?.bot && !flags["include-bots"]) continue;
-      console.log(JSON.stringify(toRecord(msg)));
+      console.log(JSON.stringify(toRecord(msg, channel)));
     }
   }
 }
@@ -221,6 +238,7 @@ async function monitor(args: string[]): Promise<void> {
 
 interface Message {
   id: string;
+  channel_id?: string;
   timestamp: string;
   edited_timestamp?: string | null;
   content?: string;
@@ -228,19 +246,27 @@ interface Message {
   attachments?: { url: string }[];
 }
 
-let cached: { token: string; channel: string; api: string } | undefined;
+let cached: { token: string; api: string } | undefined;
 
 /** Read config lazily so `help` works without any environment set up. */
-function cfg(): { token: string; channel: string; api: string } {
+function cfg(): { token: string; api: string } {
   if (!cached) {
     cached = {
       token: requireEnv("DISCORD_TOKEN"),
-      channel: requireEnv("DISCORD_CHANNEL"),
       api: (Deno.env.get("DISCORD_API") ?? "https://discord.com/api/v10").replace(/\/+$/, ""),
     };
-    if (!/^\d+$/.test(cached.channel)) fatal("DISCORD_CHANNEL must be a numeric channel id");
   }
   return cached;
+}
+
+/** The channel one command operates on: --channel wins, DISCORD_CHANNEL is the fallback.
+ *  Per-command rather than global config, so an agent working several channels names the
+ *  target on every call instead of inheriting whatever the surrounding shell exported. */
+function resolveChannel(override: string | undefined): string {
+  const channel = override ?? Deno.env.get("DISCORD_CHANNEL");
+  if (!channel) fatal("no channel: pass --channel <id> or set DISCORD_CHANNEL");
+  if (!/^\d+$/.test(channel)) fatal(`not a numeric channel id: ${channel}`);
+  return channel;
 }
 
 /** One Discord REST call. Waits out a 429 once; throws on any other failure.
@@ -274,10 +300,13 @@ async function api(method: string, path: string, body?: unknown): Promise<unknow
   throw new Error(`${method} ${path} → still rate limited after retry`);
 }
 
-/** Flatten a Discord message into a single compact NDJSON record. */
-function toRecord(msg: Message): Record<string, unknown> {
+/** Flatten a Discord message into a single compact NDJSON record.
+ *  channel_id is always present: without it, lines from several monitors are
+ *  indistinguishable once merged into one stream, and a reply has nothing to aim at. */
+function toRecord(msg: Message, channel: string): Record<string, unknown> {
   const record: Record<string, unknown> = {
     id: msg.id,
+    channel_id: msg.channel_id ?? channel,
     timestamp: msg.timestamp,
     author: msg.author?.username ?? "",
     author_id: msg.author?.id ?? "",
