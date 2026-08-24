@@ -29,7 +29,7 @@ Wherever the token ends up, it must never sit in a file that git tracks. Good ho
 
 **Done when** the three commands exist and take their secrets from the git-safe location chosen in step 2.
 
-> **Harness note.** Listening needs a background watch that notifies the agent per message. Claude Code uses its `Monitor` tool (see [`SKILL.md`](SKILL.md)). OpenCode has no such tool — see [`HARNESS-OPENCODE.md`](HARNESS-OPENCODE.md) for a worked recipe (a tmux'd `monitor` piped through `opencode-relay.ts`). On other harnesses, find an equivalent watch or fall back to long-polling.
+> **Harness note.** Listening needs a background watch that notifies the agent per message. Claude Code uses its `Monitor` tool (see [`SKILL.md`](SKILL.md)). OpenCode has no such tool — see [`HARNESS-OPENCODE.md`](HARNESS-OPENCODE.md) for a worked recipe (a tmux'd `monitor` piped through a relay). It covers v1.x and the v2 beta separately — check the version first, because their APIs differ. On other harnesses, find an equivalent watch or fall back to long-polling.
 
 ## 4. Test it against the real channel
 

@@ -29,4 +29,4 @@ Then, in any project, tell the agent to *loop yourself into* a channel link.
 - Platform-specific guidance:
     - [PLATFORM-SLACK.md](./skills/gangprompting/PLATFORM-SLACK.md) — running it on Slack (scopes, polling vs Socket Mode)
 - Harness-specific guidance:
-    - [HARNESS-OPENCODE.md](./skills/gangprompting/HARNESS-OPENCODE.md) — setup guide for OpenCode v1.x
+    - [HARNESS-OPENCODE.md](./skills/gangprompting/HARNESS-OPENCODE.md) — setup guide for OpenCode, covering both v1.x and the v2 beta

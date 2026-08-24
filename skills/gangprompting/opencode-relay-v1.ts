@@ -1,6 +1,10 @@
 #!/usr/bin/env -S deno run --allow-net --allow-env --allow-read
 /**
- * opencode-relay.ts — pipe a Discord (or any) monitor stream into an OpenCode session.
+ * opencode-relay-v1.ts — pipe a Discord (or any) monitor stream into an OpenCode **v1** session.
+ *
+ * For OpenCode v2 use opencode-relay-v2.ts instead: the routes, the request body and the
+ * authentication all differ. Check with `opencode --version` / `opencode2 --version`.
+ * Verified against OpenCode 1.17.
  *
  * OpenCode has no per-message background watch like Claude Code's Monitor tool, so
  * gangprompting on OpenCode needs two pieces: the bridge's `monitor` command running
@@ -12,7 +16,7 @@
  *
  * ── Wiring ───────────────────────────────────────────────────────────────────
  *   source <env-with-DISCORD_*-and-SESSION_ID>
- *   discord-agent-bridge.ts monitor | deno run --allow-net --allow-env --allow-read opencode-relay.ts
+ *   discord-agent-bridge.ts monitor | deno run --allow-net --allow-env --allow-read opencode-relay-v1.ts
  *
  * Run it inside a tmux (or other persistent) session so the pipe survives while the
  * agent works: OpenCode's own terminal tool won't keep a foreground pipe alive for you.
@@ -32,10 +36,10 @@
  *   • The workspace is selected with a ?directory=<abs path> query param.
  */
 
-const USAGE = `opencode-relay — inject a monitor's NDJSON stream into an OpenCode session
+const USAGE = `opencode-relay-v1 — inject a monitor's NDJSON stream into an OpenCode v1 session
 
 Usage:
-  discord-agent-bridge.ts monitor | opencode-relay.ts
+  discord-agent-bridge.ts monitor | opencode-relay-v1.ts
 
 Reads NDJSON on stdin (one message object per line, as emitted by the bridge's
 monitor). For each non-bot message it POSTs to the OpenCode session, so the agent
@@ -51,7 +55,9 @@ Environment:
 
 Each message is injected as a single-line JSON blob prefixed with its source, e.g.
   From Discord, channel 123: {"author":"dtinth","content":"yo",…}
-so the agent knows where it came from and can read every field.`;
+so the agent knows where it came from and can read every field.
+
+For OpenCode v2 use opencode-relay-v2.ts instead.`;
 
 const arg = Deno.args[0];
 if (arg === "help" || arg === "--help" || arg === "-h") {
