@@ -6,14 +6,18 @@
  * by default it talks straight to Discord with a bot token, and pointing DISCORD_API
  * at a running proxy (with a proxy-minted JWT as DISCORD_TOKEN) works identically.
  *
- * Output is NDJSON — exactly one line per message — so `monitor` can feed line-oriented
- * event streams (agent harnesses, `grep --line-buffered`, etc.) without any parsing
- * gymnastics. Messages authored by bots are skipped unless --include-bots is passed.
+ * Output is NDJSON — exactly one line per message — so an agent or a script can read it
+ * line by line. Messages authored by bots are skipped unless --include-bots is passed.
+ *
+ * To listen, an agent runs `long-poll --after <id>` as a background command. It waits
+ * until a new message arrives, prints it, and exits — so the harness tells the agent when
+ * it completes. The agent handles the messages, then runs long-poll again. This works
+ * with any harness that can run a command in the background and report when it exits.
  *
  * Every record carries its own channel_id, and every command takes --channel, so one agent
- * can work several channels at once: the lines stay distinguishable after N monitor streams
- * are merged, and a reply names its target instead of inheriting whatever DISCORD_CHANNEL
- * happens to be set in the surrounding shell.
+ * can work several channels at once: the lines stay distinguishable in the agent's context,
+ * and a reply names its target instead of inheriting whatever DISCORD_CHANNEL happens to
+ * be set in the surrounding shell.
  *
  * Meant for looping teammates into a session over Discord — see the "Best practices"
  * section of the usage text (run with no arguments) for how an agent should behave
@@ -25,17 +29,17 @@
  *                                                  --attach uploads a file, repeatable
  *   edit <messageId> [text...] [--file <path>]    edit a message this bot sent
  *   delete <messageId>                            delete a message
- *   read [--limit N] [--include-bots]             fetch recent messages once, oldest first
- *   monitor [--include-bots]                      poll for new messages forever (never exits —
- *                                                  launch via a persistent/indefinite background watch;
- *                                                  in Claude Code, this is the Monitor tool with
- *                                                  persistent: true, not Bash's run_in_background)
+ *   read [--limit N] [--before <id>] [--after <id>] [--include-bots]
+ *                                                 fetch messages once, oldest first
+ *   long-poll --after <id> [--timeout <s>] [--include-bots]
+ *                                                 wait for messages after <id>, print them, exit
+ *   monitor                                       removed; exits 1 and points to long-poll
  *
  * ── Config (env) ─────────────────────────────────────────────────────────────
  *   DISCORD_TOKEN          (required)  bot token or proxy JWT; sent as "Bot <token>"
  *   DISCORD_CHANNEL        (required unless --channel is passed)  default channel id
  *   DISCORD_API            (optional)  API base, default "https://discord.com/api/v10"
- *   DISCORD_POLL_INTERVAL  (optional)  monitor poll interval in seconds, default 20
+ *   DISCORD_POLL_INTERVAL  (optional)  long-poll poll interval in seconds, default 20
  *
  * ── Run ──────────────────────────────────────────────────────────────────────
  *   deno run --allow-net --allow-env --allow-read discord-agent-bridge.ts
@@ -61,28 +65,40 @@ Usage:
       Edit a message this bot previously sent. Text sources as with send.
   discord-agent-bridge.ts delete <messageId>
       Delete a message. Prints {"deleted":"<id>"}.
-  discord-agent-bridge.ts read [--limit N] [--include-bots]
-      Fetch up to N recent messages (default 50, max 100) once, oldest first.
-  discord-agent-bridge.ts monitor [--include-bots]
-      Watch for new messages: remembers the latest message at startup, then polls and
-      prints each newer message as it arrives. Never exits; transient errors are
-      retried. Messages from bots are skipped unless --include-bots is passed.
-      IMPORTANT: this command runs forever by design — it is meant to be launched through
-      a background/watch mechanism that supports an indefinite or persistent run (e.g. a
-      "persistent: true" option), not one with a short default timeout. A watch that times
-      out after a few minutes will be killed long before the next message arrives and you
-      will silently miss messages.
-      If you are Claude Code: this is exactly what the Monitor tool is for — run this
-      command with Monitor's persistent: true option, not Bash's run_in_background (which
-      has a short default timeout and is meant for one-shot completion, not an ongoing
-      watch). See https://code.claude.com/docs/en/tools-reference#monitor-tool
+  discord-agent-bridge.ts read [--limit N] [--before <id>] [--after <id>] [--include-bots]
+      Fetch up to N messages (default 50, max 100) once, oldest first. With no --before
+      and no --after, you get the newest N messages. With --after, you get the first N
+      messages after that id. With --before, you get the last N messages before that id.
+      Messages from bots are skipped unless --include-bots is passed.
+  discord-agent-bridge.ts long-poll --after <id> [--timeout <seconds>] [--include-bots]
+      Wait until 1 or more messages arrive after <id>. Then print them (as read does) and
+      exit with code 0. If there are already messages after <id>, it prints them at once.
+      Messages from bots do not end the wait unless --include-bots is passed, so your own
+      replies do not wake you up. Transient errors are retried.
+      With --timeout, it also exits with code 0 when the time ends and no message came.
+      Then it prints nothing on stdout, and a "no new messages" line on stderr.
+  discord-agent-bridge.ts monitor
+      Removed. Use long-poll. This command exits with code 1.
+
+How to listen:
+  1. Run read. It gives you the recent conversation. Keep the id of the newest message.
+     (read skips bot messages. If you need the id of the newest message of all, use
+     read --include-bots.)
+  2. Run long-poll --after <that id> as a BACKGROUND command. Use your harness's way to
+     run a command in the background and be told when it exits. In Claude Code, this is
+     the Bash tool with run_in_background: true.
+  3. When long-poll exits, run it again at once, with --after set to the id of the LAST
+     message it printed. Then handle the messages, and reply with send.
+     Do not use the id of a message you sent: a message that arrived before your reply
+     would then be lost.
+  Do step 3 every time. If you do not start long-poll again, you hear nothing more.
 
 Environment:
   DISCORD_TOKEN          (required)  bot token or proxy JWT; sent as "Authorization: Bot <token>"
   DISCORD_CHANNEL        (required unless --channel is passed)  default channel id
   DISCORD_API            (optional)  API base URL, default https://discord.com/api/v10
                                      (point this at a discord-message-proxy to use a scoped JWT)
-  DISCORD_POLL_INTERVAL  (optional)  monitor poll interval in seconds, default 20
+  DISCORD_POLL_INTERVAL  (optional)  long-poll poll interval in seconds, default 20
 
   If you don't have DISCORD_TOKEN / DISCORD_CHANNEL yet, ask the user for them instead of
   guessing — they may hand you a bot token and channel id directly, or a proxy URL plus a
@@ -93,12 +109,12 @@ Output format (NDJSON, one message per line):
 "attachments" (array of URLs) and "edited_timestamp" appear only when present.
 
 Best practices (for agents using this to loop teammates into a session over Discord):
-  - When you start monitor, send a greeting first (e.g. "You can type here — I'm watching
+  - When you start to listen, send a greeting first (e.g. "You can type here — I'm watching
     this channel now") so people know you're listening before they bother typing anything.
   - When a message arrives, acknowledge it with a short reply before starting work: say what
     you understood and what you'll do next. For long-running work, don't leave that "got it"
     as the only reply — send a second one once the work is actually done.
-  - When you stop monitor, send a farewell (e.g. "No longer monitoring this channel") so
+  - When you stop listening, send a farewell (e.g. "No longer monitoring this channel") so
     people don't keep typing expecting a reply.
   - When you watch more than one channel, treat channel_id as part of who is speaking. Reply
     to the channel the message came from, with --channel, and never carry what was said in
@@ -128,8 +144,10 @@ async function main(): Promise<void> {
       return await remove(args);
     case "read":
       return await read(args);
+    case "long-poll":
+      return await longPoll(args);
     case "monitor":
-      return await monitor(args);
+      return monitorRemoved();
     default:
       console.error(`unknown command: ${command}\n`);
       console.error(USAGE);
@@ -194,44 +212,81 @@ async function remove(args: string[]): Promise<void> {
 }
 
 async function read(args: string[]): Promise<void> {
-  const { flags, options } = parseArgs(args, ["include-bots"], ["limit", "channel"]);
+  const { flags, options } = parseArgs(args, ["include-bots"], ["limit", "channel", "before", "after"]);
   const channel = resolveChannel(options.channel);
   const limit = Number(options.limit ?? "50");
   if (!Number.isInteger(limit) || limit < 1 || limit > 100) fatal("read: --limit must be 1..100");
-  const messages = await api("GET", `/channels/${channel}/messages?limit=${limit}`) as Message[];
-  for (const msg of sortOldestFirst(messages)) {
+  const before = parseId("--before", options.before);
+  const after = parseId("--after", options.after);
+  for (const msg of await fetchPage(channel, limit, before, after)) {
     if (msg.author?.bot && !flags["include-bots"]) continue;
     console.log(JSON.stringify(toRecord(msg, channel)));
   }
 }
 
-async function monitor(args: string[]): Promise<void> {
-  const { flags, options } = parseArgs(args, ["include-bots"], ["channel"]);
+async function longPoll(args: string[]): Promise<void> {
+  const { flags, options } = parseArgs(args, ["include-bots"], ["after", "timeout", "channel"]);
   const channel = resolveChannel(options.channel);
+  const after = parseId("--after", options.after);
+  if (after === undefined) {
+    fatal(
+      "long-poll: --after <id> is required. Use the id of the newest message you have seen " +
+        "(the last line of `read`). Without it, a message that arrives before long-poll starts is lost.",
+    );
+  }
+  const timeoutSec = options.timeout === undefined ? undefined : Number(options.timeout);
+  if (timeoutSec !== undefined && (!Number.isFinite(timeoutSec) || timeoutSec <= 0)) {
+    fatal("long-poll: --timeout must be a number of seconds > 0");
+  }
   const intervalSec = Number(Deno.env.get("DISCORD_POLL_INTERVAL") ?? "20");
   if (!Number.isFinite(intervalSec) || intervalSec < 1) fatal("DISCORD_POLL_INTERVAL must be ≥ 1 second");
+  const deadline = timeoutSec === undefined ? Infinity : Date.now() + timeoutSec * 1000;
 
-  // Baseline: remember the newest message at startup so we never emit backlog.
-  const latest = await api("GET", `/channels/${channel}/messages?limit=1`) as Message[];
-  let lastId = latest[0]?.id ?? "0";
-  console.error(`monitoring channel ${channel} (poll every ${intervalSec}s, after message ${lastId})`);
+  let cursor = after;
+  console.error(
+    `waiting for messages in channel ${channel} after ${after} (poll every ${intervalSec}s` +
+      `${timeoutSec === undefined ? "" : `, timeout ${timeoutSec}s`})`,
+  );
 
   while (true) {
-    await sleep(intervalSec * 1000);
-    let batch: Message[];
+    // Poll first, sleep after: messages that arrived since `read` come back at once.
+    let batch: Message[] = [];
     try {
-      batch = await api("GET", `/channels/${channel}/messages?after=${lastId}&limit=100`) as Message[];
+      batch = await fetchPage(channel, 100, undefined, cursor);
     } catch (err) {
       // Transient failure (network, 5xx, rate limit past its retry): log and keep polling.
       console.error(`poll failed: ${err instanceof Error ? err.message : err}`);
-      continue;
     }
-    for (const msg of sortOldestFirst(batch)) {
-      lastId = msg.id; // advance past bot messages too, or we'd refetch them forever
+    const found: Message[] = [];
+    for (const msg of batch) {
+      cursor = msg.id; // advance past bot messages too, or we'd refetch them forever
       if (msg.author?.bot && !flags["include-bots"]) continue;
-      console.log(JSON.stringify(toRecord(msg, channel)));
+      found.push(msg);
     }
+    if (found.length > 0) {
+      for (const msg of found) console.log(JSON.stringify(toRecord(msg, channel)));
+      return;
+    }
+
+    const remaining = deadline - Date.now();
+    if (remaining <= 0) {
+      console.error(
+        `no new messages after ${timeoutSec} seconds. ` +
+          `To keep listening, run long-poll --after ${cursor} again.`,
+      );
+      return;
+    }
+    await sleep(Math.min(intervalSec * 1000, remaining));
   }
+}
+
+function monitorRemoved(): never {
+  fatal(
+    "monitor was removed. Use long-poll instead: run `read` and keep the id of the newest " +
+      "message, then run `long-poll --after <id>` as a background command. When it exits, " +
+      "handle what it printed, and run it again with the id of the last message it printed. " +
+      "Run with no arguments for the full usage.",
+  );
 }
 
 // ── Discord plumbing ───────────────────────────────────────────────────────
@@ -301,8 +356,8 @@ async function api(method: string, path: string, body?: unknown): Promise<unknow
 }
 
 /** Flatten a Discord message into a single compact NDJSON record.
- *  channel_id is always present: without it, lines from several monitors are
- *  indistinguishable once merged into one stream, and a reply has nothing to aim at. */
+ *  channel_id is always present: without it, messages from several channels look the
+ *  same in the agent's context, and a reply has nothing to aim at. */
 function toRecord(msg: Message, channel: string): Record<string, unknown> {
   const record: Record<string, unknown> = {
     id: msg.id,
@@ -317,6 +372,29 @@ function toRecord(msg: Message, channel: string): Record<string, unknown> {
   if (attachments.length > 0) record.attachments = attachments;
   if (msg.edited_timestamp) record.edited_timestamp = msg.edited_timestamp;
   return record;
+}
+
+/** One page of up to `limit` messages, oldest first. Discord accepts only one of before/after
+ *  per request, so with both we fetch after `after` and drop what is not before `before`. */
+async function fetchPage(
+  channel: string,
+  limit: number,
+  before: string | undefined,
+  after: string | undefined,
+): Promise<Message[]> {
+  const query = new URLSearchParams({ limit: String(limit) });
+  if (after !== undefined) query.set("after", after);
+  else if (before !== undefined) query.set("before", before);
+  const messages = sortOldestFirst(await api("GET", `/channels/${channel}/messages?${query}`) as Message[]);
+  return before !== undefined && after !== undefined
+    ? messages.filter((msg) => BigInt(msg.id) < BigInt(before))
+    : messages;
+}
+
+/** Validate an optional message id option. */
+function parseId(name: string, value: string | undefined): string | undefined {
+  if (value !== undefined && !/^\d+$/.test(value)) fatal(`${name} must be a numeric message id`);
+  return value;
 }
 
 /** Discord returns newest-first (mostly); we always emit chronologically. */

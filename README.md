@@ -10,7 +10,7 @@ Instead of instructing an agent to run a random script from the internet; **this
 
 Say **"loop yourself into `<channel>`"** and the agent joins the channel and works with everyone in it.
 
-On first use, it [sets up](./skills/gangprompting/SETUP.md) a small **bridge** (a small script that agent writes to be able to read from / send messages to / monitor a chat channel) and records the how-to in `CLAUDE.md`; after that, looping in is one step. The bundled [`discord-agent-bridge.ts`](./skills/gangprompting/discord-agent-bridge.ts) provided as a reference for agents to adapt to your set up.
+On first use, it [sets up](./skills/gangprompting/SETUP.md) a small **bridge** (a small script that agent writes to be able to read from / send messages to / wait for new messages in a chat channel) and records the how-to in `CLAUDE.md`; after that, looping in is one step. The bundled [`discord-agent-bridge.ts`](./skills/gangprompting/discord-agent-bridge.ts) provided as a reference for agents to adapt to your set up.
 
 ## Install
 
@@ -28,5 +28,3 @@ Then, in any project, tell the agent to *loop yourself into* a channel link.
 - [SETUP.md](./skills/gangprompting/SETUP.md) — one-time bridge setup
 - Platform-specific guidance:
     - [PLATFORM-SLACK.md](./skills/gangprompting/PLATFORM-SLACK.md) — running it on Slack (scopes, polling vs Socket Mode)
-- Harness-specific guidance:
-    - [HARNESS-OPENCODE.md](./skills/gangprompting/HARNESS-OPENCODE.md) — setup guide for OpenCode, covering both v1.x and the v2 beta

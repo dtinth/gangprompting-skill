@@ -1,13 +1,13 @@
 # Setting up a gangprompting bridge
 
-Do this once per project. The goal: a working **bridge** — `read`, `send`, `monitor` commands, one line of JSON per message — plus the setup memorized (`CLAUDE.md` or `AGENTS.md`) so that next time the user just says "loop yourself in" and you connect. Work through the steps in order; each ends on a check you can verify against the real channel.
+Do this once per project. The goal: a working **bridge** — `read`, `send`, `long-poll` commands, one line of JSON per message — plus the setup memorized (`CLAUDE.md` or `AGENTS.md`) so that next time the user just says "loop yourself in" and you connect. Work through the steps in order; each ends on a check you can verify against the real channel.
 
 **Read the [`discord-agent-bridge.ts`](discord-agent-bridge.ts) reference script first — whatever platform or harness you're on.** This will ground you on the CLI interface of the bridge you should be building for the user.
 
 The instructions here uses **Discord + Claude Code** as the example. Two axes vary from there, and the following specific guidance are provided for other platforms and harnesses:
 
 - **Platform** (the chat side): Discord is the reference. For Slack, see [`PLATFORM-SLACK.md`](PLATFORM-SLACK.md). Any other platform — build a bridge to the same interface.
-- **Harness** (how the agent listens): Claude Code uses its `Monitor` tool. For OpenCode, see [`HARNESS-OPENCODE.md`](HARNESS-OPENCODE.md). Any other harness — find an equivalent background watch, or fall back to long-polling.
+- **Harness** (how the agent listens): any harness that can run a command in the background and tell the agent when it exits. Claude Code and OpenCode can both do this — see *Listen in a loop* in [`SKILL.md`](SKILL.md).
 
 ## 1. Pick the platform and channel
 
@@ -24,12 +24,12 @@ Wherever the token ends up, it must never sit in a file that git tracks. Good ho
 
 ## 3. Build the bridge
 
-- **Discord**: the bundled [`discord-agent-bridge.ts`](discord-agent-bridge.ts) is a **reference to adapt**, not a fixed dependency. As written it runs on Deno, exposes `read` / `send` / `monitor` (each taking `--channel <id>` to override the default for one call), emits NDJSON, and reads `DISCORD_TOKEN`, `DISCORD_CHANNEL`, `DISCORD_API`, and `DISCORD_POLL_INTERVAL` from the environment — run it with no arguments to print its full usage and its best-practices for behaving in the channel. Fit it to your environment rather than adopting Deno by default: if Deno is already available, you may run the reference as-is; otherwise probe for a usable runtime and prefer the project's established stack — when porting this small script there is straightforward, rewrite the bridge in it instead of pulling in Deno. Reach for installing Deno only as a fallback, and offer it to the user rather than installing a runtime unprompted. Whatever you choose, keep the `read` / `send` / `monitor` interface and the one-JSON-object-per-line output identical, and everything downstream still applies.
-- **Any other platform**: write a script in the team's preferred stack (or plain Python) that exposes the same three commands with the same output shape — one JSON object per line, at least `{id, channel_id, timestamp, author, author_id, content}`. Model it on the reference script; keep the interface identical so the runtime guidance in [`SKILL.md`](SKILL.md) applies unchanged. For Slack, [`PLATFORM-SLACK.md`](PLATFORM-SLACK.md) covers the specifics (poll by default, Socket Mode as an optional optimization).
+- **Discord**: the bundled [`discord-agent-bridge.ts`](discord-agent-bridge.ts) is a **reference to adapt**, not a fixed dependency. As written it runs on Deno, exposes `read` / `send` / `long-poll` (each taking `--channel <id>` to override the default for one call), emits NDJSON, and reads `DISCORD_TOKEN`, `DISCORD_CHANNEL`, `DISCORD_API`, and `DISCORD_POLL_INTERVAL` from the environment — run it with no arguments to print its full usage and its best-practices for behaving in the channel. Fit it to your environment rather than adopting Deno by default: if Deno is already available, you may run the reference as-is; otherwise probe for a usable runtime and prefer the project's established stack — when porting this small script there is straightforward, rewrite the bridge in it instead of pulling in Deno. Reach for installing Deno only as a fallback, and offer it to the user rather than installing a runtime unprompted. Whatever you choose, keep the `read` / `send` / `long-poll` interface and the one-JSON-object-per-line output identical, and everything downstream still applies.
+- **Any other platform**: write a script in the team's preferred stack (or plain Python) that exposes the same three commands, with the same `--before` / `--after` / `--timeout` options, and the same output shape — one JSON object per line, at least `{id, channel_id, timestamp, author, author_id, content}`. Model it on the reference script; keep the interface identical so the runtime guidance in [`SKILL.md`](SKILL.md) applies unchanged. For Slack, [`PLATFORM-SLACK.md`](PLATFORM-SLACK.md) covers the specifics (poll by default, Socket Mode as an optional optimization).
 
 **Done when** the three commands exist and take their secrets from the git-safe location chosen in step 2.
 
-> **Harness note.** Listening needs a background watch that notifies the agent per message. Claude Code uses its `Monitor` tool (see [`SKILL.md`](SKILL.md)). OpenCode has no such tool — see [`HARNESS-OPENCODE.md`](HARNESS-OPENCODE.md) for a worked recipe (a tmux'd `monitor` piped through a relay). It covers v1.x and the v2 beta separately — check the version first, because their APIs differ. On other harnesses, find an equivalent watch or fall back to long-polling.
+> **Harness note.** `long-poll` must exit when a message arrives. Do not make it stream. The agent runs it as a background command, and the harness tells the agent when the command exits. A command that never exits never tells the agent anything.
 
 ## 4. Test it against the real channel
 
@@ -37,7 +37,7 @@ Prove each command works, not just that the script runs:
 
 - `read` fetches recent messages from the channel.
 - `send` posts a message the humans can actually see in the channel.
-- `monitor` prints a new message when someone types (or when you post from another account).
+- `long-poll --after <id>` waits, then prints a new message and exits when someone types (or when you post from another account). With `--timeout 5` and no new message, it exits and prints `no new messages after 5 seconds`.
 
 On any platform with a permission model, also confirm the **full** set of scopes/permissions for the features you'll use is granted *now* — don't discover gaps one failed call at a time, since a missing scope often fails silently. Call the platform's "am I authorized" endpoint and diff against your feature list: Slack's `auth.test` returns the granted scopes in the `x-oauth-scopes` response header; Discord's analog is the Message Content Intent plus the channel permissions from step 2.
 
@@ -48,7 +48,7 @@ On any platform with a permission model, also confirm the **full** set of scopes
 Write the non-secret facts to your project memory (`CLAUDE.md` or `AGENTS.md`) so looping in is one step next time:
 
 - the platform and channel id,
-- the exact `read` / `send` / `monitor` commands, noting *by reference* how the token is supplied (e.g. "reads `DISCORD_TOKEN` from `.env`") — never the token itself,
+- the exact `read` / `send` / `long-poll` commands, noting *by reference* how the token is supplied (e.g. "reads `DISCORD_TOKEN` from `.env`") — never the token itself,
 - the team's turn-taking preference from the group-chat guidance.
 
 **Done when** your project memory holds the commands, channel, and preference, and the token appears in no tracked file.
@@ -59,7 +59,7 @@ Bridge ready — return to [`SKILL.md`](SKILL.md) and loop in.
 
 ## Optional: lower latency with a push subscription
 
-Everything above uses **polling** — `monitor` asks the platform for new messages on an interval. That's the right default, and it scales without coordination: several agents can each poll their own channel independently and it just works. The cost is delay bounded by the poll interval, but 20–40 seconds is usually fine — an agent's turn often takes longer than that anyway.
+Everything above uses **polling** — `long-poll` asks the platform for new messages on an interval. That's the right default, and it scales without coordination: several agents can each poll their own channel independently and it just works. The cost is delay bounded by the poll interval, but 20–40 seconds is usually fine — an agent's turn often takes longer than that anyway.
 
 When the lowest possible latency actually matters, offer the user a **push subscription** instead: subscribe to the platform directly so events arrive the instant they happen — Discord's **Gateway**, Slack's **Socket Mode** (platform specifics live in the platform guide, e.g. [`PLATFORM-SLACK.md`](PLATFORM-SLACK.md)). The catch is that most platforms allow only **one connection per app**, so you either:
 
