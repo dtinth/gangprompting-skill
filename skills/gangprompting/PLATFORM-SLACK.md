@@ -1,6 +1,6 @@
 # Gangprompting on Slack
 
-Slack has no bundled bridge — you build one to the same interface as [`discord-agent-bridge.ts`](discord-agent-bridge.ts): the `read` / `send` / `monitor` commands, one JSON object per line. This file covers only the Slack-specific parts — the app and token to create, the scopes to request, and how to subscribe to messages. Everything else (behaviour, memorizing the setup) follows [`SETUP.md`](SETUP.md) and [`SKILL.md`](SKILL.md) unchanged.
+Slack has no bundled bridge — you build one to the same interface as [`discord-agent-bridge.ts`](discord-agent-bridge.ts): the `read` / `send` / `long-poll` commands, one JSON object per line. This file covers only the Slack-specific parts — the app and token to create, the scopes to request, and how to subscribe to messages. Everything else (behaviour, memorizing the setup) follows [`SETUP.md`](SETUP.md) and [`SKILL.md`](SKILL.md) unchanged.
 
 ## Build an internal app
 
@@ -15,7 +15,7 @@ Request the bot scopes for every feature you'll build *upfront* — adding one l
 | Feature | Scopes |
 |---|---|
 | send | `chat:write` |
-| read / monitor / backfill | `channels:history`, `channels:read` (add `groups:history`, `groups:read` for private channels) |
+| read / long-poll / backfill | `channels:history`, `channels:read` (add `groups:history`, `groups:read` for private channels) |
 | resolve author ids to display names | `users:read` |
 | upload / download files | `files:write`, `files:read` |
 
@@ -25,10 +25,10 @@ Request the bot scopes for every feature you'll build *upfront* — adding one l
 
 The lightweight default is **polling** `conversations.history` on an interval (and `conversations.replies` for threads), tracking the latest seen `ts` and requesting only newer messages each time — exactly as the Discord bridge tracks the last message id. It fits gangprompting well:
 
-Slack's message events carry the channel in `channel`; map it to `channel_id` in the record you emit, and give `send` / `read` / `monitor` the same `--channel` override the Discord bridge has, so one agent can work several channels without guessing which room a line came from.
+Slack's message events carry the channel in `channel`; map it to `channel_id` in the record you emit, and give `send` / `read` / `long-poll` the same `--channel` override the Discord bridge has, so one agent can work several channels without guessing which room a line came from.
 
 - **No central coordinator** — each agent polls its own channel independently.
-- **Nothing persistent to keep alive** — just periodic REST calls, the same shape as the Discord bridge's `monitor`.
+- **Nothing persistent to keep alive** — just periodic REST calls, the same shape as the Discord bridge's `long-poll`.
 
 The cost is delay: messages arrive at most one poll interval late. At Tier 3 (50+/min for an internal app) you can poll every few seconds and stay well within budget, so the lag is a few seconds — fine for a team assistant.
 
@@ -37,6 +37,6 @@ The cost is delay: messages arrive at most one poll interval late. At Tier 3 (50
 Slack's push subscription is **Socket Mode** — the low-latency alternative to polling. See [Optional: lower latency with a push subscription](SETUP.md) in `SETUP.md` for when it's worth it and the one-connection-per-app caveat (and the fan-out daemon that works around it). The Slack-specific mechanics:
 
 - It needs an **app-level token** (`xapp-…`) with the `connections:write` scope — separate from the bot token, and easy to confuse with the bot scopes above.
-- If you build a fan-out daemon, SQLite is enough for the shared store: the daemon holds the socket and writes every event there, and `read` / `monitor` become local queries scoped by channel.
+- If you build a fan-out daemon, SQLite is enough for the shared store: the daemon holds the socket and writes every event there, and `read` / `long-poll` become local queries scoped by channel.
 
 (A third mechanism, the **Events API**, pushes events to an HTTP endpoint — but it needs a public HTTPS URL, which an agent in a devbox usually can't provide, so it's rarely the right fit here.)
