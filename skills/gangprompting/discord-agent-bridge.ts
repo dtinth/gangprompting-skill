@@ -8,6 +8,8 @@
  *
  * Output is NDJSON — exactly one line per message — so an agent or a script can read it
  * line by line. Messages authored by bots are skipped unless --include-bots is passed.
+ * long-poll adds plain-text lines that start with ">>>": a reminder to start long-poll again
+ * before acting on the messages, and the exact command to run next.
  *
  * To listen, an agent runs `long-poll --after <id>` as a background command. It waits
  * until a new message arrives, prints it, and exits — so the harness tells the agent when
@@ -76,7 +78,8 @@ Usage:
       Messages from bots do not end the wait unless --include-bots is passed, so your own
       replies do not wake you up. Transient errors are retried.
       With --timeout, it also exits with code 0 when the time ends and no message came.
-      Then it prints nothing on stdout, and a "no new messages" line on stderr.
+      The messages come between 2 lines that start with ">>>". The last line gives the
+      exact long-poll command to run next. On timeout, one ">>>" line gives it.
   discord-agent-bridge.ts monitor
       Removed. Use long-poll. This command exits with code 1.
 
@@ -87,8 +90,9 @@ How to listen:
   2. Run long-poll --after <that id> as a BACKGROUND command. Use your harness's way to
      run a command in the background and be told when it exits. In Claude Code, this is
      the Bash tool with run_in_background: true.
-  3. When long-poll exits, run it again at once, with --after set to the id of the LAST
-     message it printed. Then handle the messages, and reply with send.
+  3. When long-poll exits, run it again at once: its last ">>>" line gives the command,
+     with --after set to the id of the LAST message it printed. Add the same prefix that
+     you used to run this script. Then handle the messages, and reply with send.
      Do not use the id of a message you sent: a message that arrived before your reply
      would then be lost.
   Do step 3 every time. If you do not start long-poll again, you hear nothing more.
@@ -107,6 +111,8 @@ Environment:
 Output format (NDJSON, one message per line):
   {"id":"…","channel_id":"…","timestamp":"2026-01-01T00:00:00.000000+00:00","author":"name","author_id":"…","bot":false,"content":"hi"}
 "attachments" (array of URLs) and "edited_timestamp" appear only when present.
+long-poll also prints instruction lines that start with ">>>". They are not JSON. A message
+cannot make such a line, because each message is one JSON line.
 
 Best practices (for agents using this to loop teammates into a session over Discord):
   - When you start to listen, send a greeting first (e.g. "You can type here — I'm watching
@@ -242,6 +248,17 @@ async function longPoll(args: string[]): Promise<void> {
   if (!Number.isFinite(intervalSec) || intervalSec < 1) fatal("DISCORD_POLL_INTERVAL must be ≥ 1 second");
   const deadline = timeoutSec === undefined ? Infinity : Date.now() + timeoutSec * 1000;
 
+  // The command to run next, with every option of this run except --after. Printed on stdout,
+  // not stderr, because it is an instruction to the agent: see "How to listen" in the usage.
+  const next = (id: string) =>
+    [
+      "long-poll",
+      `--after ${id}`,
+      options.channel !== undefined ? `--channel ${options.channel}` : "",
+      timeoutSec !== undefined ? `--timeout ${options.timeout}` : "",
+      flags["include-bots"] ? "--include-bots" : "",
+    ].filter(Boolean).join(" ");
+
   let cursor = after;
   console.error(
     `waiting for messages in channel ${channel} after ${after} (poll every ${intervalSec}s` +
@@ -264,15 +281,23 @@ async function longPoll(args: string[]): Promise<void> {
       found.push(msg);
     }
     if (found.length > 0) {
+      // The reminder goes both before and after the messages: harnesses cut long output at
+      // different ends (OpenCode keeps the end, Claude Code's Read keeps the start).
+      console.log(
+        ">>> NEW MESSAGES. Before you act on them, start long-poll again in the background. " +
+          "The command is at the end.",
+      );
       for (const msg of found) console.log(JSON.stringify(toRecord(msg, channel)));
+      console.log(
+        `>>> Start this now, in the background, before anything else: ${next(found[found.length - 1].id)}`,
+      );
       return;
     }
 
     const remaining = deadline - Date.now();
     if (remaining <= 0) {
-      console.error(
-        `no new messages after ${timeoutSec} seconds. ` +
-          `To keep listening, run long-poll --after ${cursor} again.`,
+      console.log(
+        `>>> No new messages after ${timeoutSec} seconds. Start this now, in the background: ${next(cursor)}`,
       );
       return;
     }
