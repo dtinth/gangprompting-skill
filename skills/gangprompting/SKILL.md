@@ -21,7 +21,7 @@ The `long-poll` command waits until a new message arrives. Then it prints the me
    - **Claude Code**: the Bash tool with `run_in_background: true`.
    - **OpenCode**: the shell tool with `background: true`.
    - **Other harnesses**: any way to run a command in the background and be told when it exits.
-3. When it exits, run `long-poll` again at once, with `--after` set to the id of the **last message it printed**. Then read the messages and do the work. Reply with `send`.
+3. When it exits, run `long-poll` again at once. Its last line, which starts with `>>>`, gives the command, with `--after` set to the id of the **last message it printed**. Add the same prefix that you used to run the bridge. Then read the messages and do the work. Reply with `send`.
 
 **Always start `long-poll` again.** You hear the channel only while `long-poll` runs. If you forget to start it again, you hear nothing more, and the people in the channel wait for a reply that does not come.
 
@@ -30,7 +30,7 @@ Some rules for the loop:
 - **Use the id of the last message you received**, not the id of a message you sent. With the id of your own message, you lose the messages that arrived before it.
 - No message is lost between two runs of `long-poll`. If messages arrived after the `--after` id, `long-poll` prints them at once.
 - **One `long-poll` per channel.** To listen to several channels, run one `long-poll --channel <id>` for each channel.
-- If your harness stops background commands after some time, add `--timeout <seconds>` with a shorter time. When the time ends and no message came, `long-poll` exits with code 0 and prints `no new messages after N seconds`. Then run it again with the same `--after` id.
+- If your harness stops background commands after some time, add `--timeout <seconds>` with a shorter time. When the time ends and no message came, `long-poll` exits with code 0 and prints `>>> No new messages after N seconds`, with the command to run next. Run that command.
 - If your harness cannot run a command in the background, run `read --after <id>` from time to time between tasks.
 
 Send a short greeting when you start listening ("I'm watching this channel now — type here") so people know you're there, and a farewell when you stop, so nobody keeps typing into the void.
